@@ -77,6 +77,7 @@ class PiwigoImageExtractor(PiwigoMixin, Extractor):
 
 class PiwigoGalleryExtractor(PiwigoMixin, GalleryExtractor):
     category = "piwigo"
+    directory_fmt = ("{domain}", "{gallery_id} {title}")
 
     pattern = r"(?:piwigo:(?P<protocol>https?://)?)(?P<domain>[\w.-]+)/index\.php\?/category/(?P<category_id>\d+)"
 
@@ -99,11 +100,10 @@ class PiwigoGalleryExtractor(PiwigoMixin, GalleryExtractor):
         return {
             "gallery_id": text.parse_int(data_infos["category_id"]),
             "title": title["content"],
+            "domain": self.domain,
         }
 
     def images(self, page):
-        images = []
-
         def picture_link(href):
             return href and href.startswith("picture.php")
 
@@ -111,7 +111,7 @@ class PiwigoGalleryExtractor(PiwigoMixin, GalleryExtractor):
             soup = BeautifulSoup(page, features="html.parser")
             image_tags = soup.find(id="thumbnails").find_all("a", href=picture_link)
             if image_tags:
-                images.extend([tag["href"] for tag in image_tags])
+                yield from self.handle_picture_links([tag["href"] for tag in image_tags])
 
             next_ref = soup.find("a", href=True, rel="next")
             if not next_ref:
@@ -119,8 +119,6 @@ class PiwigoGalleryExtractor(PiwigoMixin, GalleryExtractor):
 
             next_url = urljoin(self.root, next_ref["href"])
             page = self.request(next_url).content
-
-        return self.handle_picture_links(images)
 
     def handle_picture_links(self, urls):
         for picture_url in urls:
