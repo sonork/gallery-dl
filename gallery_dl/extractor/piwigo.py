@@ -6,13 +6,35 @@
 
 """Extractors for piwigo sites"""
 
-from .common import Extractor, Message
+from .common import Extractor, Message, GalleryExtractor
 from .. import text, exception
 import re
+import json
+import typing
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 
-class PiwigoImageExtractor(Extractor):
+class PiwigoMixin:
+    def parse_page(self, page: str, domain: str, image_id: str) -> typing.Tuple[str, dict]:
+        soup = BeautifulSoup(page, features="html.parser")
+        img = soup.find("img", id="theMainImage", src=True)
+        filename = img["alt"]
+
+        # link has format: action.php?id=42&part=e&download
+        dl_link = f"https://{domain}/action.php?id={image_id}&part=e&download"
+
+        data = {
+            "title": img["title"],
+            "image_id": text.parse_int(image_id),
+            "filename": filename,
+            "domain": domain,
+        }
+
+        data["filename"], _, data["extension"] = filename.rpartition(".")
+        return dl_link, data
+
+class PiwigoImageExtractor(PiwigoMixin, Extractor):
     category = "piwigo"
     subcategory = "image"
     directory_fmt = ("{category}", "{domain}")
@@ -39,23 +61,9 @@ class PiwigoImageExtractor(Extractor):
         url = f"https://{self.domain}/picture?/{self.image_id}"
 
         page = self.request(url).text
-        soup = BeautifulSoup(page, features="html.parser")
-        img = soup.find("img", id="theMainImage", src=True)
-        filename = img["alt"]
-
-        # link has format: action.php?id=42&part=e&download
-        dl_link = f"https://{self.domain}/action.php?id={self.image_id}&part=e&download"
-
-        data = {
-            "url": url,
-            "title": img["title"],
-            "image_id": text.parse_int(self.image_id),
-            "filename": filename,
-            "domain": self.domain,
-            "collection_name": self.collection_name,
-        }
-
-        data["filename"], _, data["extension"] = filename.rpartition(".")
+        dl_link, data = self.parse_page(page, self.domain, self.image_id)
+        data["url"] = url
+        data["collection_name"]= self.collection_name
         self.log.debug(str(data))
 
         yield Message.Directory, data
