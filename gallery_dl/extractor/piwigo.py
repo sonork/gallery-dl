@@ -69,7 +69,6 @@ class PiwigoImageExtractor(PiwigoMixin, Extractor):
         dl_link, data = self.parse_page(page, self.domain, self.image_id)
         data["url"] = url
         data["collection_name"] = self.collection_name
-        self.log.debug(str(data))
 
         yield Message.Directory, data
         yield Message.Url, dl_link, data
