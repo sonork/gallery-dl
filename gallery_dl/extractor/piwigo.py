@@ -105,19 +105,24 @@ class PiwigoGalleryExtractor(PiwigoMixin, GalleryExtractor):
     def images(self, page):
         def picture_link(href):
             return href and href.startswith("picture.php")
-
-        while True:
+        
+        while page:
             soup = BeautifulSoup(page, features="html.parser")
-            image_tags = soup.find(id="thumbnails").find_all("a", href=picture_link)
-            if image_tags:
-                yield from self.handle_picture_links([tag["href"] for tag in image_tags])
-
             next_ref = soup.find("a", href=True, rel="next")
-            if not next_ref:
-                break
+            page = self.load_next_page(next_ref)
 
-            next_url = urljoin(self.root, next_ref["href"])
-            page = self.request(next_url).content
+            image_tags = soup.find(id="thumbnails").find_all("a", href=picture_link)
+            if not image_tags:
+                continue
+            
+            yield from self.handle_picture_links([tag["href"] for tag in image_tags])
+
+    def load_next_page(self, next_ref=None):
+        if not next_ref:
+            return None
+        
+        next_url = urljoin(self.root, next_ref["href"])
+        return self.request(next_url).content
 
     def handle_picture_links(self, urls):
         for picture_url in urls:
